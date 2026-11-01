@@ -4,7 +4,7 @@
   "name": "QmQQNT",
   "slug": "qm-qqnt",
   "description": "个人 QQNT 插件：Telegram 风格界面、消息工具、Markdown 与可配置自动化。",
-  "version": "0.1.0-dev.1",
+  "version": "0.1.0-dev.2",
   "thumb": "./assets/icon.svg",
   "homepage": "https://github.com/wxj881027/QmQQNT",
   "repo": "wxj881027/QmQQNT",
