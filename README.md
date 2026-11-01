@@ -1,127 +1,63 @@
-<div align="center">
+# QmQQNT
 
-# 🌊 琉璃 Liuli
+基于琉璃维护的个人 QQNT 大插件，把 Telegram macOS 风格界面与常用消息工具放在同一个插件里。
 
-**把 DSH 客户端的「琉璃」视觉语言搬到 QQNT 上的主题插件**
+## 界面
 
-[![LiteLoaderQQNT](https://img.shields.io/badge/LiteLoaderQQNT-1.4.1-7c6ce6?style=flat-square)](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT)
-[![QQ](https://img.shields.io/badge/QQ-9.9.36%20%28Win%29-1d9bf0?style=flat-square)](https://im.qq.com/)
-[![platform](https://img.shields.io/badge/platform-win%20%7C%20linux%20%7C%20mac-888?style=flat-square)](#)
-[![license](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#)
+- 壁纸固定在窗口坐标系内，保持比例；解码和取色只接受最后一次选择。
+- 按壁纸颜色占比选主色，气泡不再使用相反明暗的配色。
+- 左侧导航默认常驻，不覆盖会话列表；顶栏默认自动隐藏，两者分别可配置。
+- 群资料、个人资料、设置页共用材质参数；统一承载层圆角，调整成员标题的空间。
+- 菜单字号与通知设置控件统一整理。字号直接输入，例如 `14px`。
+- 动画使用短时位移和淡入淡出，支持中断、减少动态效果、历史消息滚动与会话切换。
 
-<img src="https://count.getloli.com/get/@qqnt-liuli-theme?theme=gelbooru" alt="访问计数" />
+## 消息工具
 
-</div>
+- Markdown-it：Linkify、Typographer、代码高亮随明暗模式变化。不执行消息中的 HTML，不自动请求外链图片。
+- 消息旁 `+1` 与右键“复读”，使用 QQ 的原样转发接口。
+- 防撤回：缓存中有原文时恢复别人撤回的消息，并标记撤回状态；自己撤回自己保留原生行为。
+- 引用时移除自动附带的 @，保留手动添加的 @。
+- 鼠标返回侧键回到 QQ 主列表。
+- 小程序分享卡片转换为网页卡片；支持的网页链接用默认浏览器打开。
+- 发送时间、消息 ID、序号和本地观察计数。群序号与实际消息总量分开标注。
+- 导航底部同时提供邮箱和收藏，优先复用 QQ 原生入口。
 
----
+## LLM 与红包
 
-> 从壁纸取色，用 Material Color Utilities 派生整套 M3 配色，给 QQNT 换上一层会跟着壁纸呼吸的磨砂玻璃外观。**不依赖 BetterQQNT。**
+默认关闭自动化。模型服务需要在设置中填写，不附带任何密钥。
 
-## 📸 预览
+LLM 支持生成草稿和白名单自动回复，默认草稿。右键消息选择“生成代回复草稿”，可以编辑后放入原会话输入框。自动回复需要同时启用、选择自动模式并加入会话白名单。关闭功能或切换账号会取消未完成的生成，不自动重发结果未知的消息。
 
-<div align="center">
+红包只处理启用后的白名单会话。普通、文字口令与语音口令分别判断；文字和语音发送需要对应开关。语音口令使用配置的 TTS 服务生成 PCM 或单声道 16 位 WAV，再转换为 Silk/PTT。QQ 未确认发送成功时，不继续领取。遇到无法识别的红包类型会提示并跳过。
 
-<!-- SCREENSHOTS -->
-<img src="assets/screenshots/chat.jpg" alt="聊天界面实机截图" width="760" />
-<br/>
-<sub>实机截图（名字、消息、头像为演示内容）</sub>
+模型服务基础地址使用兼容 Chat Completions 的接口，TTS 使用兼容 Speech 的接口。例：基础地址填 `https://your-service.example/v1`，分别请求其 `/chat/completions` 和 `/audio/speech`。地址和模型由实际服务提供者决定。
 
-<br/><br/>
+## 安装
 
-<img src="assets/screenshots/settings.jpg" alt="设置页实机截图" width="560" />
+需要已经能够加载插件的 LiteLoaderQQNT。插件自带浏览器解析器、高亮库和 Silk WASM，不需要编译。
 
-<br/>
-<sub>设置页实机截图</sub>
-
-</div>
-
-## ✨ 功能
-
-| | 功能 | 说明 |
-|---|---|---|
-| 🎨 | **动态色板** | 从壁纸取色，用 Material Color Utilities 派生整套 M3 配色，亮/暗跟随 QQ |
-| 🧊 | **磨砂玻璃** | 会话列表、详情栏、弹层、右键菜单都是壁纸上的半透明材质 |
-| 💬 | **TG 式布局** | 连续消息合并、名字进气泡、单行输入栏、指向唤出的顶部胶囊 |
-| 📝 | **Markdown 行内渲染** | `` `代码` ``、`**粗体**`、`*斜体*`、`~~删除线~~`、`\|\|剧透\|\|`（移植自 BetterQQNT） |
-| 🔔 | **@ 高亮** | @我 / @全体成员 暖色淡底，@别人 品牌色 |
-| 🌐 | **卡片用浏览器打开** | 装了 LiteLoader 后点 B 站、腾讯文档等「QQ小程序」卡片会弹「文件已损坏」，琉璃改成取卡片里的网页链接用默认浏览器打开。同时装了 QQ 增强时交给 QQ 增强处理，不会打开两次 |
-| 🖌️ | **名字颜色** | 统一用 MCU 派生的第三色（tertiary），和主题同源又一眼可分 |
-| 🌀 | **消息入场** | 打开会话时级联浮入，新消息单条浮入（遵守系统「减少动画」） |
-| 🔤 | **自定义字体** | 设置页里选本机已安装的字体 |
-| 🧩 | **布局自定义** | 右键菜单可切「只显示图标」并自定义顺序；输入框里放几个按钮、放哪些、顺序，「更多」宫格里的顺序都能调；左侧边栏可隐藏空间、更多等按钮 |
-| ⚙️ | **设置页** | 材质模糊/透明度/泛光/阴影/壁纸压暗、自定义壁纸、明暗模式、Markdown 开关、字体 |
-
-## 📦 安装
-
-### 方式一：一键安装器（推荐）
-
-到 **[Releases](https://github.com/LilycleHeart/qqnt-liuli-theme/releases/latest)** 下载 `QQNT-LiteLoader-Installer.exe`，双击点「一键安装」，它会自动装好 LiteLoaderQQNT + 本主题并重开 QQ。「还原」按钮可一键回退。
-
-> 安装器只装 **LiteLoader + 琉璃主题**。
-
-### 方式二：手动安装
-
-**第一步：装好 LiteLoaderQQNT**
-
-本插件是标准 [**LiteLoaderQQNT**](https://github.com/LiteLoaderQQNT/LiteLoaderQQNT) 插件，先按官方方式让 QQ 加载 LiteLoader。
-
-QQ 9.9.x 会校验自身文件，直接改会被拦。用**文件校验补丁**绕过（向作者索取，或从上面的安装器里解出）：
-
-| 文件 | 放到哪里 | 作用 |
-|---|---|---|
-| `dbghelp_x64.dll` → 改名 `dbghelp.dll` | QQ 安装目录（和 `QQ.exe` 同级，如 `C:\Program Files\Tencent\QQNT\`） | 跳过文件校验，加载 LiteLoader |
-| `QQ.exe`（补丁版） | QQ 安装目录，覆盖原来的 | 配套补丁，缺它启动会报「文件损坏」 |
-
-> **先备份**原来的 `dbghelp.dll` 和 `QQ.exe` 再覆盖。完整步骤见 [LiteLoaderQQNT 官方文档](https://liteloaderqqnt.github.io/guide/install.html)。
-
-**第二步：装插件**
-
-1. 把本仓库放到 `LiteLoaderQQNT\plugins\liuli-dsh-theme\`
-2. 重启 QQ
-3. QQ 设置左栏找到「**琉璃**」，选一张壁纸，主题色就从它取
-
-### 兼容性提示
-
-在 QQ 9.9.36（Windows，Electron 40）上测试。LiteLoaderQQNT 1.4.1 在这个版本上需要把 `src/main/store.js` 里的 `dirent.path` 改成 `LiteLoader.path.plugins`（Electron 40 去掉了 `fs.Dirent.path`）。
-
-## 🗂️ 结构
-
-```
-manifest.json
-main/index.js        主进程：日志、自己的 uid（给 @ 高亮用）
-preload/index.js     暴露 selfUid 给界面
-renderer/index.js    注入 CSS、路由作用域、动态色板、布局修补、Markdown、@ 高亮、入场动画、设置页
-assets/              各层 CSS、MCU（mcu.js）、图标
+```powershell
+./tools/install.ps1 -LiteLoaderRoot 'D:/Tencent/QQNT/LiteLoaderQQNT' -RemoveOtherPlugins
 ```
 
-## 🕳️ 踩过的坑（改之前必看）
+脚本先备份现有插件和数据，核对复制文件，再移出其他插件。旧数据保持可恢复；已有琉璃材质配置迁入 `data/qm-qqnt/config.json`，壁纸、字体和布局继续使用原有本地配置。重启 QQ 后在设置左栏打开 **QmQQNT**。
 
-1. **`data-hash` / `data-liuli-scope` 必须自己同步**。主题规则挂在 `body[data-hash^="#/main"]` 和 `body[data-liuli-scope="main"]` 下。QQ 9.9.36 的 vue-router 不派发 hashchange，要用定时器轮询兜底（400ms）。
-2. **`--ll-*` 令牌必须齐**。缺一个可能让整条声明作废：`--ll-scrim` 缺失时 `rgba(var(--ll-scrim), …)` 解析失败，壁纸静默消失。
-3. **CSS 里不能用 `url("local://…")`**，`background-image` 会被 CSP 挡掉。壁纸必须 base64 内联。
-4. **`#app::before` 承载壁纸**，不能放 body：`#app` 有 `overflow:hidden`，`.global-container` 是 `position:fixed; z-index:1`。
-5. **右键菜单不能挂 backdrop-filter / transform**：「输入」/「时唤起」的子菜单是嵌在父菜单里的 `position:fixed`，父级一旦成为定位参照，子菜单就错位。模糊放在 `::before` 上。
-6. **不要盖全屏噪点层、不要给气泡文字加阴影**：两者都会让字发虚。半透明层上的字只能用灰度抗锯齿，本来就比 ClearType 软。
-7. **滚动时不要读 `innerText`**：会强制排版。DOM 观察回调要合并（150ms），只读 `textContent`。
-8. **消息数据**：`.message` 元素上的 `__VUE__[0].props.msgRecord`。
+脚本不启动或关闭 QQ。当前 QQ 进程在重启之前仍运行原先已经加载的插件。
 
-## 🖼️ 壁纸
+若 LiteLoader 已识别 QmQQNT，但左栏没有入口，请使用 0.1.0-dev.2 或更新版本并重启 QQ。此版修正 Windows `local://` 模块地址和 LiteLoader 1.4.1 的预加载扩展名；设置页错过加载时机会补回入口，后续模块加载失败会在入口内显示原因。
 
-插件不带默认壁纸。装好后在设置页「琉璃」里选一张图，主题色会从这张图取。
+## 数据
 
-也可以放一张本地默认壁纸（不会被提交）：
-- `assets/wallpaper.jpg`：取色用
-- `assets/wallpaper.css`：内联成 base64 的 `#app::before` 背景（CSS 里不能用 `local://`，见坑 3）
+消息功能配置和撤回缓存按登录账号分开保存到 `data/qm-qqnt/accounts/<账号哈希>/`。仅持久化撤回原文、观察统计和去重索引；普通消息的原文缓存保持内存上限。
 
-没有壁纸时取色回退到 `#1d9bf0`。
+API 密钥优先使用 Electron 系统加密。系统无法加密时仅在当前会话中保留，设置页会说明。公开源码、安装包与日志不包含个人密钥或聊天记录。
 
-## 📋 待办
+## 验证状态
 
-- 亮色模式尚未完整实测
-- BetterQQNT 里「单条消息右键禁用 Markdown」未移植
+已补充颜色、几何、动画、IPC、缓存、Markdown、音频和自动化规则的行为测试代码，**未执行测试**。当前只做静态审阅和语法解析，没有 QQ 界面或真实业务操作验证。
 
----
+QQ 的内部 IPC 会随版本变化。普通红包和文字口令路径参考现有插件；语音类型依据原生卡片语义识别，尚未验证当前 QQ 版本的全部类型字段。无法确认时跳过并显示状态，不把请求发出或超时当作成功。
 
-<div align="center">
-<sub>移植自 <a href="https://github.com/LilycleHeart/dsh-liuli-ui-enhance">dsh-liuli-ui-enhance</a> · 基于 <a href="https://github.com/LiteLoaderQQNT/LiteLoaderQQNT">LiteLoaderQQNT</a></sub>
-</div>
+测试代码位于 `tests/`。获得验证授权后可使用 Node 内置测试运行器执行，测试不需要 QQ、互联网或真实账号目录。
+
+第三方来源、固定版本和许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。原始主题由 [LilycleHeart](https://github.com/LilycleHeart/qqnt-liuli-theme) 编写。

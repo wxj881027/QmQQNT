@@ -25,7 +25,8 @@
  * body[q-theme="dark"] 下的暗色定义。
  * ============================================================ */
 
-body {
+body[data-liuli-theme="dsh"],
+body[data-liuli-theme="dsh"] #app {
   /* ── 文字 ── */
   --text_primary: var(--ll-on-glass) !important;
   --text_primary_light: var(--ll-on-glass-2) !important;

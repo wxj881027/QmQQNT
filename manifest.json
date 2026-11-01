@@ -1,22 +1,32 @@
 {
   "manifest_version": 4,
   "type": "extension",
-  "name": "琉璃",
-  "slug": "liuli-dsh-theme",
-  "description": "琉璃视觉（移植自 dsh-liuli-ui-enhance）：MCU 壁纸取色动态色板、磨砂玻璃材质、Markdown 渲染、@ 高亮、消息级联入场、自定义字体、右键菜单/输入框/侧边栏布局自定义。",
-  "version": "1.2.2",
+  "name": "QmQQNT",
+  "slug": "qm-qqnt",
+  "description": "个人 QQNT 插件：Telegram 风格界面、消息工具、Markdown 与可配置自动化。",
+  "version": "0.1.0-dev.2",
   "thumb": "./assets/icon.svg",
-  "author": {
-    "name": "LilycleHeart",
-    "link": "https://github.com/LilycleHeart"
-  },
-  "homepage": "https://github.com/LilycleHeart/qqnt-liuli-theme",
-  "repo": "LilycleHeart/qqnt-liuli-theme",
+  "homepage": "https://github.com/wxj881027/QmQQNT",
+  "repo": "wxj881027/QmQQNT",
   "dependencies": [],
-  "platform": ["win32", "linux", "darwin"],
+  "platform": [
+    "win32",
+    "linux",
+    "darwin"
+  ],
   "injects": {
     "main": "./main/index.js",
     "preload": "./preload/index.js",
     "renderer": "./renderer/index.js"
-  }
+  },
+  "authors": [
+    {
+      "name": "QimenG",
+      "link": "https://github.com/wxj881027"
+    },
+    {
+      "name": "LilycleHeart",
+      "link": "https://github.com/LilycleHeart"
+    }
+  ]
 }

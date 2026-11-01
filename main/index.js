@@ -1,40 +1,25 @@
-// 琉璃主题插件 · 主进程侧
-// 负责：日志、自己的 uid（给 @ 高亮区分 @我 / @别人）。
-// 功能性的东西（防撤回、复读、引用不带 @、记住位置）都在 qq-enhance 插件里。
+// QmQQNT：主题与消息功能共用一个生命周期。
 const fs = require("node:fs");
 const path = require("node:path");
-const { ipcMain, shell } = require("electron");
-
-const SLUG = "liuli-dsh-theme";
-const LOG = path.join(LiteLoader.path.data, SLUG, "plugin.log");
-
-function log(message) {
-    try {
-        fs.mkdirSync(path.dirname(LOG), { recursive: true });
-        fs.appendFileSync(LOG, new Date().toISOString() + " " + message + "\n");
-    } catch (e) {}
-}
-
-log("main loaded | liteloader=" + LiteLoader.versions.liteloader + " qqnt=" + LiteLoader.versions.qqnt);
-
-/* LiteLoader 在内核报 onSessionInitComplete 时触发 onLogin(uid)。 */
-let selfUid = "";
-ipcMain.handle("LiteLoader.liuli.selfUid", () => selfUid);
-
-/* 小程序卡片用默认浏览器打开：只放行 http/https */
-ipcMain.handle("LiteLoader.liuli.openExternal", async (_e, url) => {
-    try {
-        const u = new URL(String(url));
-        if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-        await shell.openExternal(u.href);
-        log("open external " + u.href);
-        return true;
-    } catch (e) { log("open external failed: " + e.message); return false; }
+const { ipcMain, shell, app } = require("electron");
+const { createRuntime } = require("./runtime.cjs");
+const { installLlm } = require("./llm.cjs");
+const { installRedPackets } = require("./red-packet.cjs");
+const root = path.join(LiteLoader.path.data, "qm-qqnt");
+fs.mkdirSync(root, { recursive: true });
+const previous = path.join(LiteLoader.path.data, "liuli-dsh-theme", "config.json");
+if (!fs.existsSync(path.join(root, "config.json")) && fs.existsSync(previous)) fs.copyFileSync(previous, path.join(root, "config.json"));
+const runtime = createRuntime(root);
+installLlm(runtime);
+installRedPackets(runtime);
+ipcMain.handle("LiteLoader.liuli.selfUid", () => runtime.uid);
+ipcMain.handle("LiteLoader.liuli.openExternal", async (_event, value) => {
+    let url; try { url = new URL(String(value)); } catch { return false; }
+    if (!["http:", "https:"].includes(url.protocol)) return false;
+    await shell.openExternal(url.href); return true;
 });
-
+app.on("before-quit", runtime.flush);
 module.exports = {
-    onLogin(uid) {
-        selfUid = String(uid || "");
-        log("login uid=" + selfUid);
-    },
+    onLogin(uid) { runtime.onLogin(uid); },
+    onBrowserWindowCreated(window) { runtime.hookWindow(window); }
 };

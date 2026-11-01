@@ -31,11 +31,11 @@ function arkUrl(rec) {
     return "";
 }
 
-export function installArkExternal(api) {
+export function installArkExternal(api, enabled = () => true) {
     if (window.__liuliArkExternal || !api || typeof api.openExternal !== "function") return;
     window.__liuliArkExternal = true;
     const target = e => {
-        if (window.qq_enhance || e.button !== 0) return "";
+        if (!enabled() || e.button !== 0) return "";
         const card = e.target && e.target.closest && e.target.closest(".ark-msg-content-container .ark-item-container");
         return card ? arkUrl(recordOf(card)) : "";
     };
