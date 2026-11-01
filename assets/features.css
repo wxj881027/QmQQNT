@@ -1,0 +1,40 @@
+.qm-message-actions { display: inline-flex; gap: 4px; opacity: 0; transition: opacity 140ms ease-out; }
+.message:hover .qm-message-actions, .message:focus-within .qm-message-actions { opacity: 1; }
+.qm-message-actions[hidden], .qm-message-time[hidden], .qm-recalled[hidden] { display: none !important; }
+.qm-repeat { border: 0; border-radius: 12px; background: rgba(var(--ll-acrylic), .82); color: var(--ll-on-glass); padding: 3px 7px; cursor: pointer; font: inherit; font-size: 12px; }
+.qm-message-time { display: block; align-self: flex-end; font-size: 10px; line-height: 15px; opacity: .65; white-space: nowrap; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.qm-recalled { display: block; font-size: 11px; color: var(--ll-on-glass-2); margin-top: 3px; }
+.qm-menu-action { width: 100%; border: none; color: inherit; font: inherit; background: transparent; text-align: start; padding: 8px 12px; cursor: pointer; }
+.qm-menu-action:hover { background: var(--overlay_hover); }
+#qm-status { position: fixed; bottom: 24px; left: 50%; translate: -50% 0; max-width: 70vw; padding: 9px 15px; border-radius: 12px; background: var(--ll-surface-high); color: var(--ll-on-glass); z-index: 2147483001; pointer-events: none; opacity: 0; transition: opacity 160ms ease-out; }
+#qm-status[data-visible="1"] { opacity: 1; }
+.qm-dialog { width: min(520px, 85vw); max-height: 80vh; padding: 20px; border: 1px solid var(--ll-stroke-2); border-radius: var(--ll-radius); background: var(--ll-surface-high); color: var(--ll-on-glass); font-size: var(--qm-font-size,14px); }
+.qm-dialog::backdrop { background: rgba(0,0,0,.3); animation: qm-backdrop-in 140ms ease-out both; }
+.qm-dialog[data-qm-closing]::backdrop { animation: qm-backdrop-out 140ms ease-out both; }
+@keyframes qm-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes qm-backdrop-out { from { opacity: var(--qm-backdrop-from,1); } to { opacity: 0; } }
+.qm-dialog textarea { width: 100%; min-height: 160px; box-sizing: border-box; font: inherit; }
+.qm-dialog dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 8px 16px; }
+.qm-dialog dd { margin: 0; overflow-wrap: anywhere; }
+.qm-feature-settings { font-size: var(--qm-font-size,14px); }
+.qm-feature-settings .qm-field { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 0; }
+.qm-feature-settings .qm-field > span { flex: 1 1 45%; }
+.qm-feature-settings .qm-field > :is(input:not([type=checkbox]),textarea) { flex: 1 1 45%; min-width: 0; width: 45%; }
+.qm-feature-settings :is(input:not([type=checkbox]),textarea,select) { border: 1px solid var(--ll-stroke-2); border-radius: 8px; padding: 6px 9px; background: rgba(var(--ll-acrylic), .3); color: var(--ll-on-glass); font: inherit; }
+.qm-feature-settings input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--ll-brand); }
+.qm-feature-settings textarea { min-height: 60px; resize: vertical; }
+.qm-feature-settings fieldset { margin: 18px 0; padding: 12px; border: 1px solid var(--ll-stroke-2); border-radius: 12px; }
+.qm-feature-settings button, .qm-dialog button { margin: 5px 6px 5px 0; border: 0; border-radius: 8px; padding: 7px 12px; background: var(--ll-primary-container); color: var(--ll-on-primary-container); font: inherit; cursor: pointer; }
+.qm-feature-settings p { font-size: 12px; color: var(--ll-on-glass-2); line-height: 1.5; }
+.qm-shortcuts { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 6px 0; }
+.qm-shortcuts button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 9px; background: transparent; color: var(--ll-on-glass-2); cursor: pointer; }
+.qm-shortcuts button:hover { background: var(--overlay_hover); color: var(--ll-on-glass); }
+.qm-shortcuts svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; }
+[data-qm-native-shortcut] { display: none !important; }
+body[data-qm-resolving-shortcut] :is(.q-context-menu, .q-menu) { visibility: hidden !important; }
+/* 原生设置行保持布局，装饰不能套到整个通知选项或滑块外壳上。 */
+body[data-liuli-scope="setting"] #app .setting-main :is(.option-list, .form-item, .setting-item, .setting-item__content, .setting-item__label) { box-shadow: none !important; border: none !important; border-radius: 0 !important; background: transparent !important; }
+body[data-liuli-scope="setting"] #app .q-switch__handle { background: transparent !important; box-shadow: none !important; }
+body[data-liuli-scope="setting"] #app .q-switch__handle::before { background: #fff !important; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+body[data-liuli-scope="setting"] #app .setting-main :is(.q-pulldown-menu-button, .q-select) { border-radius: 8px !important; font-size: var(--qm-font-size,14px) !important; }
+@media(prefers-reduced-motion:reduce) { .qm-message-actions, #qm-status { transition: none; } }

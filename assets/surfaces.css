@@ -1,0 +1,67 @@
+/* 单一材质层与统一圆角，不改写 QQ 自己保存的调色盘配置。 */
+body[data-liuli-theme="dsh"] { isolation: isolate; --ll-menu-font-size: 13px; }
+.liuli-wallpaper-layer { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-repeat: no-repeat; opacity: 1; }
+.liuli-wallpaper-layer::after { content: ""; position: absolute; inset: 0; background: rgba(var(--ll-scrim-rgb), var(--ll-wallpaper-dim, 0.18)); }
+body[data-liuli-theme="dsh"] #app::before,
+body[data-liuli-theme="dsh"][data-liuli-scope="setting"] #app::after { content: none !important; }
+body[data-liuli-theme="dsh"] #app,
+body[data-liuli-theme="dsh"] #app :is(.global-container, .container-content, .container-content-view, .two-col-layout, .aio, .message-panel, .setting-main, .setting-tab, .setting-layout > div) {
+  background-color: transparent !important; background-image: none !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.chat-background, .chat-background-image, .skin-background) {
+  background: transparent !important; opacity: 0 !important; pointer-events: none !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.setting-layout, .aio .side-panel, .right-sidebar, .group-box, .container-sidebar, .recent-contact, .user-profile-card:not(.topbar-profile)) {
+  background: rgba(var(--ll-acrylic), var(--ll-material-opacity)) !important;
+  background-image: none !important;
+  backdrop-filter: var(--ll-material-blur) !important;
+  -webkit-backdrop-filter: var(--ll-material-blur) !important;
+  border-radius: var(--ll-radius) !important; color: var(--ll-on-glass) !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.sidebar-nav, .sidebar-wrapper, .group-panel, .group-box__container, .group-box__wrapper, .group-notice, .group-member, .group-user, .group-member-list),
+body[data-liuli-theme="dsh"] #app .right-sidebar .group-box,
+body[data-liuli-theme="dsh"] #app .side-panel .group-box {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.secondary-info, .group-user__name, .group-member-name, .contact-name, .summary-main) { color: var(--ll-on-glass-2) !important; }
+body[data-liuli-theme="dsh"] #app .aio .side-panel::before { content: none !important; }
+body[data-liuli-theme="dsh"] #app .side-panel :is(.group-profile-card, .buddy-profile, .group-member-card, .profile-container, .profile-content, .group-panel, .setting-list),
+body[data-liuli-theme="dsh"] #app .setting-layout :is(.setting-main, .setting-tab, .nav-bar, .setting-tab > div, .setting-main > div) {
+  background: transparent !important; backdrop-filter: none !important; box-shadow: none !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.recent-contact, .container-sidebar, .group-box, .right-sidebar, .chat-msg-area, .chat-input-area, .chat-header, .side-panel) {
+  border-radius: var(--ll-radius) !important; background-clip: padding-box !important;
+}
+body[data-liuli-theme="dsh"] #app :is(.group-box, .right-sidebar, .chat-msg-area) { overflow: hidden !important; }
+body[data-liuli-theme="dsh"] #app .group-box { display: flex !important; flex-direction: column !important; min-height: 0 !important; }
+body[data-liuli-theme="dsh"] #app .group-box .group-notice { flex: 0 0 auto !important; max-height: min(240px, 32vh); box-sizing: border-box !important; }
+body[data-liuli-theme="dsh"] #app .group-member { display: flex !important; flex-direction: column !important; flex: 1 1 auto !important; min-height: 0 !important; }
+/* 标题不参与成员列表的高度压缩，中文与自定义字体留足行高。 */
+body[data-liuli-theme="dsh"] #app .group-member-title {
+  flex: 0 0 auto !important; height: auto !important; min-height: 44px !important; line-height: 22px !important;
+  padding: 8px 10px !important; margin: 0 !important; overflow: visible !important; box-sizing: border-box !important;
+}
+body[data-liuli-theme="dsh"] #app .group-member-title > span { height: auto !important; min-height: 22px !important; line-height: 22px !important; overflow: visible !important; }
+body[data-liuli-theme="dsh"] #app .group-member-list { flex: 1 1 auto !important; min-height: 0 !important; }
+/* 常驻导航占用真实宽度，不覆盖会话列表。 */
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="0"] .global-container .container-content > .container-sidebar {
+  transform: none !important; top: calc(var(--ll-top-inset, 0px) + var(--ll-dock-gap)) !important;
+  bottom: var(--ll-dock-gap) !important; height: auto !important; width: 52px !important;
+}
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="0"] .global-container .container-content { padding-left: calc(52px + var(--ll-dock-gap)) !important; }
+body[data-liuli-nav-auto-hide="0"] #liuli-nav-handle,
+body[data-liuli-top-auto-hide="0"] .liuli-top-hint { display: none !important; }
+body[data-liuli-top-auto-hide="0"] { --ll-top-inset: 40px; }
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="0"] .global-container > .topbar,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="0"] .global-container > .topbar .topbar-content { height: 40px !important; min-height: 40px !important; }
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="0"] :is(.topbar-profile, .window-control-area) { opacity: 1 !important; visibility: visible !important; transform: none !important; }
+body[data-liuli-theme="dsh"] :is(.q-context-menu, .q-context-sub-menu__container, .q-menu, .func-menu, .q-pulldown-menu-wrapper) {
+  font-family: inherit !important; font-size: var(--ll-menu-font-size) !important; line-height: 20px !important; border-radius: var(--ll-radius-sm) !important;
+}
+body[data-liuli-theme="dsh"] :is(.q-context-menu-item__text, .q-context-menu-item .label, .func-menu__item, .func-menu__item .text, .func-menu__item .title, .q-menu .menu-item) {
+  font-size: var(--ll-menu-font-size) !important; line-height: 20px !important; font-weight: 400 !important;
+}
+body[data-liuli-theme="dsh"] :is(.q-context-menu-item__shortcut, .q-context-menu-item .shortcut) { font-size: 12px !important; }

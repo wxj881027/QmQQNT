@@ -7,7 +7,7 @@
 
 const KEY = "liuli-layout";
 const SEEN_KEY = "liuli-layout-seen";
-const DEFAULTS = { menuCompact: false, menuOrder: [], barOrder: [], barPinned: 1, navHidden: [] };
+const DEFAULTS = { menuCompact: false, menuOrder: [], barOrder: [], barPinned: 1, navHidden: [], navAutoHide: false, topAutoHide: true };
 
 const ICON_UP = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7.41 15.41 12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>';
 const ICON_DOWN = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z"/></svg>';
@@ -171,6 +171,8 @@ export function applyAll() {
     try {
         const cfg = loadLayout();
         document.body.toggleAttribute("data-liuli-menu-compact", !!cfg.menuCompact);
+        document.body.dataset.liuliNavAutoHide = cfg.navAutoHide ? "1" : "0";
+        document.body.dataset.liuliTopAutoHide = cfg.topAutoHide ? "1" : "0";
         applyNav();
         applyBar();
         document.querySelectorAll(".q-context-menu.aio-right-click-menu").forEach(applyMenu);
@@ -297,6 +299,10 @@ export function buildLayoutControls(host) {
     const resetBar = el("div", "liuli-field__hint liuli-lo-reset", "恢复默认");
     resetBar.addEventListener("click", () => { cfg.barOrder = []; cfg.barPinned = 1; save(); rebuild(); });
     host.appendChild(resetBar);
+
+    host.appendChild(el("div", "liuli-panel__group", "导航和顶栏"));
+    seg(host, "左侧导航", [["0", "常驻"], ["1", "自动隐藏"]], cfg.navAutoHide ? "1" : "0", value => { cfg.navAutoHide = value === "1"; save(); });
+    seg(host, "窗口顶栏", [["0", "常驻"], ["1", "自动隐藏"]], cfg.topAutoHide ? "1" : "0", value => { cfg.topAutoHide = value === "1"; save(); });
 
     /* 左侧边栏 */
     host.appendChild(el("div", "liuli-panel__group", "左侧边栏"));

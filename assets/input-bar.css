@@ -36,12 +36,20 @@
 }
 
 /* 2. 工具栏收起 / 展开浮层 */
-.chat-input-area > .chat-func-bar {
-  display: none !important;
+.chat-input-area > .chat-func-bar:not(.liuli-expanded) {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  translate: 0 6px;
+  transition: opacity 140ms ease-out, translate 180ms ease-out, visibility 0s 180ms;
 }
 
-.chat-input-area > .chat-func-bar.liuli-expanded {
+.chat-input-area > .chat-func-bar {
   display: flex !important;
+  opacity: 1;
+  visibility: visible;
+  translate: 0 0;
+  transition: opacity 140ms ease-out, translate 180ms ease-out, visibility 0s;
   position: absolute !important;
   left: 12px !important;
   right: 120px !important;

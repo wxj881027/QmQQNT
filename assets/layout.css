@@ -426,23 +426,23 @@ body[data-liuli-scope="main"] .aio > .chat-header input {
 }
 
 /* ── 标题栏收起：内容区顶到窗口上沿（留 8px） ── */
-body[data-liuli-scope="main"] .global-container > .topbar,
-body[data-liuli-scope="main"] .global-container > .topbar .topbar-content {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .global-container > .topbar,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .global-container > .topbar .topbar-content {
   height: 0 !important;
   min-height: 0 !important;
   overflow: visible !important;
 }
-body[data-liuli-scope="main"] .global-container .container-content {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .global-container .container-content {
   padding-top: var(--ll-dock-gap) !important;
 }
-body[data-liuli-scope="main"] .global-container .container-content > .container-sidebar {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .global-container .container-content > .container-sidebar {
   top: var(--ll-dock-gap) !important;
 }
 
 /* ── 两颗胶囊：常态隐藏，指向窗口左上 / 右上角唤出 ──
  * 隐藏时 visibility 延迟 250ms 再生效：鼠标从感应条移到胶囊上的途中不会消失。 */
-body[data-liuli-scope="main"] .topbar-content .user-profile-card.topbar-profile,
-body[data-liuli-scope="main"] .window-title-bar .window-control-area {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .topbar-content .user-profile-card.topbar-profile,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .window-title-bar .window-control-area {
   position: fixed !important;
   top: 6px !important;
   margin: 0 !important;
@@ -455,19 +455,19 @@ body[data-liuli-scope="main"] .window-title-bar .window-control-area {
   transition: opacity 160ms ease, transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
     visibility 0s linear 250ms !important;
 }
-body[data-liuli-scope="main"] .topbar-content .user-profile-card.topbar-profile {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .topbar-content .user-profile-card.topbar-profile {
   /* 让出左侧导航条（约 56px），展开时不压住导航顶部（2026-10-30） */
   left: calc(var(--ll-dock-gap) + 56px) !important;
 }
-body[data-liuli-scope="main"] .window-title-bar .window-control-area {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .window-title-bar .window-control-area {
   right: var(--ll-dock-gap) !important;
 }
-body[data-liuli-scope="main"][data-liuli-r-l] .topbar-content .user-profile-card.topbar-profile,
-body[data-liuli-scope="main"] .topbar-content .user-profile-card.topbar-profile:hover,
-body[data-liuli-scope="main"] .topbar-content .user-profile-card.topbar-profile:focus-within,
-body[data-liuli-scope="main"][data-liuli-r-r] .window-title-bar .window-control-area,
-body[data-liuli-scope="main"] .window-title-bar .window-control-area:hover,
-body[data-liuli-scope="main"] .window-title-bar .window-control-area:focus-within {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"][data-liuli-r-l] .topbar-content .user-profile-card.topbar-profile,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .topbar-content .user-profile-card.topbar-profile:hover,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .topbar-content .user-profile-card.topbar-profile:focus-within,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"][data-liuli-r-r] .window-title-bar .window-control-area,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .window-title-bar .window-control-area:hover,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .window-title-bar .window-control-area:focus-within {
   opacity: 1 !important;
   visibility: visible !important;
   transform: none !important;
@@ -476,7 +476,7 @@ body[data-liuli-scope="main"] .window-title-bar .window-control-area:focus-withi
 }
 
 /* 感应条：窗口顶边 8px，左右各一段，中间仍是拖动区 */
-body[data-liuli-scope="main"] .liuli-top-hint {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .liuli-top-hint {
   position: fixed;
   top: 0;
   height: var(--ll-dock-gap);
@@ -485,10 +485,10 @@ body[data-liuli-scope="main"] .liuli-top-hint {
   -webkit-app-region: no-drag;
   cursor: default;
 }
-body[data-liuli-scope="main"] #liuli-top-hint-l { left: 56px; }   /* 跟着头像胶囊让出导航条 */
-body[data-liuli-scope="main"] #liuli-top-hint-r { right: 0; }
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] #liuli-top-hint-l { left: 56px; }   /* 跟着头像胶囊让出导航条 */
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] #liuli-top-hint-r { right: 0; }
 /* 提示短横：告诉用户这里能唤出东西（DSH WindowControls 的 .hint 同款） */
-body[data-liuli-scope="main"] .liuli-top-hint::after {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .liuli-top-hint::after {
   content: "";
   position: absolute;
   top: 2px;
@@ -500,30 +500,30 @@ body[data-liuli-scope="main"] .liuli-top-hint::after {
   opacity: 0.7;
   transition: opacity 140ms ease;
 }
-body[data-liuli-scope="main"] #liuli-top-hint-l::after { left: 24px; }
-body[data-liuli-scope="main"] #liuli-top-hint-r::after { right: 24px; }
-body[data-liuli-scope="main"] .liuli-top-hint:hover::after,
-body[data-liuli-scope="main"][data-liuli-r-l] #liuli-top-hint-l::after,
-body[data-liuli-scope="main"][data-liuli-r-r] #liuli-top-hint-r::after {
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] #liuli-top-hint-l::after { left: 24px; }
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] #liuli-top-hint-r::after { right: 24px; }
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"] .liuli-top-hint:hover::after,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"][data-liuli-r-l] #liuli-top-hint-l::after,
+body[data-liuli-scope="main"][data-liuli-top-auto-hide="1"][data-liuli-r-r] #liuli-top-hint-r::after {
   opacity: 0;
 }
 
 /* ── 左侧导航：完全收起，入口是左边缘的把手 ── */
-body[data-liuli-scope="main"] .global-container .container-content > .container-sidebar {
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="1"] .global-container .container-content > .container-sidebar {
   transform: translateX(calc(-100% - var(--ll-dock-gap) - 4px)) !important;
   transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1) 180ms,
     box-shadow 220ms ease 180ms !important;
   -webkit-app-region: no-drag !important;
 }
-body[data-liuli-scope="main"][data-liuli-r-nav] .global-container .container-content > .container-sidebar,
-body[data-liuli-scope="main"] .global-container .container-content > .container-sidebar:hover,
-body[data-liuli-scope="main"] .global-container .container-content > .container-sidebar:focus-within {
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="1"][data-liuli-r-nav] .global-container .container-content > .container-sidebar,
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="1"] .global-container .container-content > .container-sidebar:hover,
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="1"] .global-container .container-content > .container-sidebar:focus-within {
   transform: translateX(0) !important;
   transition-delay: 0s !important;
   box-shadow: var(--ll-card-shadow), var(--ll-shadow-float) !important;
   --ll-material-opacity: 0.92;
 }
-body[data-liuli-scope="main"][data-liuli-r-nav] .global-container .container-content > .container-sidebar {
+body[data-liuli-scope="main"][data-liuli-nav-auto-hide="1"][data-liuli-r-nav] .global-container .container-content > .container-sidebar {
   backdrop-filter: blur(24px) saturate(1.6) !important;
   -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
 }
@@ -810,9 +810,9 @@ body:not([data-liuli-scope="main"]) #app::after {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background: var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-aux-opacity, 0.72));
-  backdrop-filter: blur(24px) saturate(1.6);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  background: var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity));
+  backdrop-filter: var(--ll-material-blur);
+  -webkit-backdrop-filter: var(--ll-material-blur);
 }
 /* 独立窗口里 QQ 写死的实底（深色 rgb(34,34,34) / 浅色 rgb(229,238,255)） */
 body:not([data-liuli-scope="main"]) .draggable-view__container:not(.window-title-bar):not(#ll):not(#ll),
@@ -1307,7 +1307,7 @@ body .aio .side-panel:not(#ll)::before {
   z-index: -1;
   pointer-events: none;
   border-radius: inherit;
-  background: var(--ll-noise), rgba(var(--ll-acrylic), 0.9);
+  background: var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity));
   backdrop-filter: blur(28px) saturate(1.6);
   -webkit-backdrop-filter: blur(28px) saturate(1.6);
 }
@@ -1365,41 +1365,6 @@ body .q-dialog > .q-dialog-main:not(#ll):not(#ll) {
   -webkit-backdrop-filter: var(--ll-float-blur, blur(28px) saturate(1.6)) !important;
   border-radius: var(--ll-radius) !important;
   box-shadow: var(--ll-float-shadow, var(--ll-shadow-float)) !important;
-}
-
-/* ── 开关（2026-10-29）──
- * QQ 的滑块统一用 --on_brand_primary（暗色主题下是深色），
- * 关闭态压在浅灰轨道上就成了一个深色小点。改成 M3 开关：
- *   关：轨道 surface + outline 描边，滑块 outline 色
- *   开：轨道 brand，滑块 on-brand */
-body .q-switch:not(#ll) {
-  background: rgba(var(--ll-on-glass-rgb), 0.1) !important;
-  box-shadow: inset 0 0 0 1.5px var(--ll-stroke-1, rgba(var(--ll-on-glass-rgb), 0.4)) !important;
-  transition: background-color 160ms ease, box-shadow 160ms ease !important;
-}
-body .q-switch:not(#ll) .q-switch__handle {
-  background: var(--ll-stroke-1, var(--ll-on-glass-3)) !important;
-  transition: transform 200ms var(--ll-ease-spring, ease), background-color 160ms ease !important;
-}
-body .q-switch.is-active:not(#ll) {
-  background: var(--ll-brand) !important;
-  box-shadow: none !important;
-}
-body .q-switch.is-active:not(#ll) .q-switch__handle {
-  background: var(--ll-on-brand) !important;
-}
-body .q-switch.is-disabled:not(#ll) {
-  opacity: 0.45 !important;
-}
-
-/* 开关滑块：真正看得见的圆点是 .q-switch__handle::before（QQ 用 --icon_white 上色，
- * 本主题把它映射成 on-brand 深色，关闭态就成了浅轨道上的深蓝点）。伪元素一起改。 */
-body .q-switch:not(#ll) .q-switch__handle::before {
-  background: var(--ll-stroke-1, var(--ll-on-glass-3)) !important;
-  border-radius: 50% !important;
-}
-body .q-switch.is-active:not(#ll) .q-switch__handle::before {
-  background: var(--ll-on-brand) !important;
 }
 
 /* ── 通话窗口 / 轻提示：QQ 的 --text_white 在这里是「深灰卡片上的白字」，

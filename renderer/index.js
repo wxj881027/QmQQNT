@@ -1,14 +1,19 @@
-// 琉璃主题插件 · 渲染进程侧
-// 1) 同步路由作用域（592 条规则依赖 data-hash）
-// 2) 注入 CSS：壁纸 → QQ token 打透 → 静态色板兜底 → 外观
-// 3) 从壁纸取源色，用 MCU 实时派生 M3 色板（跟随壁纸）
-// 4) 顽固容器内联覆盖 + 对比度修复
+// QmQQNT 界面入口：配置、路由、气泡装饰与功能模块生命周期。
+// 取色、壁纸、动效和消息业务分别由独立模块负责。
 
-const SLUG = "liuli-dsh-theme";
+const SLUG = "qm-qqnt";
 import { installLayout, applyBar, nativeBarItem, applyAll as llLayoutPass, buildLayoutSection } from "./layout-custom.js";
 import { installArkExternal } from "./ark-external.js";
+import { sourceFromPixels, bubblePalette, latestTask } from "./palette.mjs";
+import { cropBounds, wallpaperGeometry, createWallpaper } from "./wallpaper.mjs";
+import { installMotion } from "./motion.mjs";
+import { installThemeTokens } from "./theme-tokens.mjs";
+import { groupRuns } from "./grouping.mjs";
+import { recordOf } from "./feature-helpers.mjs";
+import { initFeatures, featuresPass, featureConfig, refreshFeatureUi } from "./features.mjs";
+import { buildFeatureSettings } from "./feature-settings.mjs";
 const ASSET_BASE = "local://profile/plugins/" + SLUG + "/assets/";
-const FILES = ["wallpaper.css", "qq-tokens.css", "palette.css", "liuli.css", "typography.css", "panel.css", "settings-page.css", "details.css", "no-dividers.css", "input-bar.css", "bubbles.css", "layout.css", "lists.css", "motion.css", "markdown.css", "layout-custom.css"];
+const FILES = ["wallpaper.css", "qq-tokens.css", "palette.css", "liuli.css", "typography.css", "panel.css", "settings-page.css", "details.css", "no-dividers.css", "input-bar.css", "bubbles.css", "layout.css", "lists.css", "motion.css", "markdown.css", "layout-custom.css", "surfaces.css", "features.css"];
 const STYLE_ID = "liuli-dsh-theme";
 const WALLPAPER = ASSET_BASE + "wallpaper.jpg";
 // 默认壁纸不随插件发布：assets/wallpaper.css（内联壁纸）和 assets/wallpaper.jpg（取色用）
@@ -32,7 +37,7 @@ function installRouteScope() {
         const scope = hash.indexOf("#/setting") === 0 ? "setting"
             : hash.indexOf("#/main") === 0 ? "main"
             : (hash === "" || hash === "#/blank") ? "boot" : "aux";
-        if (body.dataset.liuliScope !== scope) body.dataset.liuliScope = scope;
+        if (body.dataset.liuliScope !== scope) { body.dataset.liuliScope = scope; window.dispatchEvent(new Event("qm-route")); }
     };
     sync();
     addEventListener("hashchange", sync);
@@ -40,43 +45,14 @@ function installRouteScope() {
     setInterval(sync, 400);
 }
 
-/* ---------- 壁纸取色（照搬 dsh liuli-runtime.ts） ----------
- * 缩到 64×64，挑"最鲜艳且不太暗/太亮"的像素作为源色。
- * 原项目还会再和 MCU 的 sourceColorFromImage 比对色度，取更鲜艳的那个；
- * 这里简化为只用 chromatics，效果等价且不依赖额外 API。
- */
-function chromaticSourceFromCanvas(ctx, w, h) {
-    let px;
-    try { px = ctx.getImageData(0, 0, w, h).data; } catch (e) { return null; }
-    let best = { r: 29, g: 155, b: 240, score: -1 };
-    for (let i = 0; i < px.length; i += 4) {
-        const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
-        if (a < 128) continue;
-        const max = Math.max(r, g, b), min = Math.min(r, g, b);
-        const chroma = max - min;
-        const l = (max + min) / 2;
-        if (l < 35 || l > 220) continue;
-        const score = chroma - Math.abs(l - 128) * 0.4;
-        if (score > best.score) best = { r, g, b, score };
-    }
-    const hex = v => v.toString(16).padStart(2, "0");
-    return "#" + hex(best.r) + hex(best.g) + hex(best.b);
-}
-
-function chromaOf(hex) {
-    const h = hex.replace("#", "");
-    const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
-    return Math.max(r, g, b) - Math.min(r, g, b);
-}
-
-async function extractSource() {
+/* ---------- 按壁纸可见选区与颜色占比取色 ---------- */
+async function extractSource(state = loadWallpaperState()) {
     const img = new Image();
     // 用户选过壁纸就从那张取色；之前固定读插件自带的 wallpaper.jpg，
     // 换了壁纸主题色也不变（"没有自动取色"）。
     let src = WALLPAPER;
     try {
-        const st = loadWallpaperState();
-        if (st && st.src) src = st.src;
+        if (state && state.src) src = state.src;
     } catch (e) {}
     img.src = src;
     if (img.decode) { await img.decode(); } else {
@@ -88,11 +64,9 @@ async function extractSource() {
     canvas.height = size;
     const ctx = canvas.getContext("2d");
     if (!ctx) return DEFAULT_SOURCE;
-    ctx.drawImage(img, 0, 0, size, size);
-    const picked = chromaticSourceFromCanvas(ctx, size, size);
-    if (!picked) return DEFAULT_SOURCE;
-    // 太灰就回退默认蓝（与 liuli-palette 的 chromaOf >= 24 判据一致）
-    return chromaOf(picked) >= 24 ? picked : DEFAULT_SOURCE;
+    const crop = cropBounds(img.naturalWidth, img.naturalHeight, state.area);
+    ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, size, size);
+    return sourceFromPixels(ctx.getImageData(0, 0, size, size).data, DEFAULT_SOURCE);
 }
 
 /* ---------- MCU 派生 M3 色板（照搬 liuli-palette.ts） ---------- */
@@ -179,157 +153,28 @@ function deriveVars(mcu, sourceHex, isDark) {
     };
 }
 
+const commitPalette = latestTask();
 async function applyDynamicPalette() {
-    if (window.__liuliPaletteApplied) return;
-    window.__liuliPaletteApplied = true;
-    let source = DEFAULT_SOURCE;
-    try { source = await extractSource(); } catch (e) { source = DEFAULT_SOURCE; }
-    const mcu = await import(ASSET_BASE + "mcu.js");
-    const isDark = llIsDark();
-    const vars = deriveVars(mcu, source, isDark);
-    // 自己的气泡：照搬 DSH bubblePal —— 取「相反明暗」方案的 primaryContainer，
-    // 暗色主题下是浅色气泡 + 深字，对比度由 M3 保证。
-    try {
-        const opp = mcu.themeFromSourceColor(mcu.argbFromHex(source)).schemes[isDark ? "light" : "dark"];
-        vars["--ll-bubble-self"] = mcu.hexFromArgb(opp.primaryContainer);
-        vars["--ll-bubble-self-fg"] = mcu.hexFromArgb(opp.onPrimaryContainer);
-        // 自己气泡里的链接：用同一方案的第三色（tertiary），和正文颜色分开，压在 primaryContainer 上对比度够
-        vars["--ll-bubble-self-link"] = mcu.hexFromArgb(opp.tertiary);
-    } catch (e) {}
-    const body = document.body;
-    for (const k in vars) body.style.setProperty(k, vars[k]);
-    body.dataset.liuliSource = source;
-    console.log("[liuli-dsh-theme] wallpaper source = " + source + " (brand " + vars["--ll-brand"] + ")");
+    const state = loadWallpaperState(), isDark = llIsDark();
+    return commitPalette(async () => {
+        let source = DEFAULT_SOURCE;
+        try { source = await extractSource(state); } catch {}
+        const mcu = await import(ASSET_BASE + "mcu.js");
+        const vars = deriveVars(mcu, source, isDark);
+        const bubble = bubblePalette(source, isDark);
+        Object.assign(vars, {
+            "--ll-bubble-self": bubble.self, "--ll-bubble-self-fg": bubble.selfText,
+            "--ll-bubble-self-link": bubble.selfText,
+            "--ll-bubble-other": bubble.other, "--ll-bubble-other-fg": bubble.otherText
+        });
+        return { source, vars };
+    }, ({ source, vars }) => {
+        for (const key in vars) document.body.style.setProperty(key, vars[key]);
+        document.body.dataset.liuliSource = source;
+    });
 }
 
-/* ---------- 承载层：只这些允许挂玻璃 ---------- */
-const GLASS = [
-    [".container-sidebar", "var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity))"],
-    [".recent-contact", "var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity))"],
-    // .chat-header 不加材质（群聊标题栏保持通透）
-    // .chat-input-area 也不加！它的 backdrop-filter 是内联写入的，
-    // 会让内部的 .msg-input（ProseMirror 编辑器）完全不绘制 ——
-    // 表现就是"输入框消失、点了没反应"。输入区背景改由 input-bar.css 提供。
-    [".right-sidebar", "var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity))"],
-    [".group-box", "var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity))"],
-    // 左下角资料卡；必须排除 .topbar-profile（顶部同名元素宽 1797px）
-    [".user-profile-card:not(.topbar-profile)", "var(--ll-noise), rgba(var(--ll-acrylic), var(--ll-material-opacity))"]
-];
-const CLEAR = [
-    ".message-panel", ".container-content-view", ".two-col-layout",
-    ".two-col-layout__aside", ".two-col-layout__main", ".aio", ".group-chat",
-    ".chat-msg-area",
-    ".sidebar-nav", ".sidebar-wrapper",
-    ".group-panel", ".group-box__container", ".group-box__wrapper",
-    ".group-notice", ".group-member", ".group-user", ".group-member-list"
-];
-
-/* ---------- 颜色归一化 ----------
- * QQ 有大量规则直接写死颜色（不走 token），实测高频：
- *   rgba(255,255,255,0.9)  ×240   主文字
- *   rgba(255,255,255,0.4)  ×46
- *   rgba(255,255,255,0.7)  ×28   图标
- *   rgb(128,128,128)       ×若干  次要文字
- *   rgb(0,102,204)         tab 遮罩 / 发送按钮
- *   rgb(247,76,48)         红点
- * 这些只能靠内联改写。只改 color（不改背景），且只处理叶子节点，
- * 纯白 rgb(255,255,255) 不动 —— 那通常是品牌色实底上的正确反色。
- */
-const QQ_COLOR_MAP = {
-    "rgba(255, 255, 255, 0.9)": "var(--ll-on-glass)",
-    "rgba(255, 255, 255, 0.8)": "var(--ll-on-glass)",
-    "rgba(255, 255, 255, 0.7)": "var(--ll-on-glass-2)",
-    "rgba(255, 255, 255, 0.6)": "var(--ll-on-glass-2)",
-    "rgba(255, 255, 255, 0.5)": "var(--ll-on-glass-3)",
-    "rgba(255, 255, 255, 0.4)": "var(--ll-on-glass-3)",
-    "rgba(255, 255, 255, 0.3)": "var(--ll-on-glass-3)",
-    "rgb(128, 128, 128)": "var(--ll-on-glass-2)",
-    "rgb(102, 102, 102)": "var(--ll-on-glass-2)",
-    "rgb(153, 153, 153)": "var(--ll-on-glass-2)",
-    "rgb(204, 204, 204)": "var(--ll-on-glass-3)",
-    "rgb(0, 102, 204)": "var(--ll-brand)",
-    "rgb(45, 119, 229)": "var(--ll-brand)",
-    "rgb(0, 153, 255)": "var(--ll-brand)",
-    "rgb(247, 76, 48)": "var(--ll-danger)",
-    "rgb(255, 51, 82)": "var(--ll-danger)",
-    "rgb(21, 209, 115)": "var(--ll-success)",
-    "rgb(255, 179, 0)": "var(--ll-warn)"
-};
-
-/* 性能护栏（2026-10-29）：发起群聊的选人对话框一次挂上几千个节点，
- * 原来每 1.5 秒对全页每个叶子节点 getComputedStyle，主线程被拖死。
- * 现在：每个节点只检查一次（WeakSet），每轮最多花 8ms，剩下的下一轮接着做。 */
-const llColorSeen = new WeakSet();
-function normalizeColors() {
-    try {
-        const t0 = performance.now();
-        const nodes = document.querySelectorAll("body *");
-        for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i];
-            if (llColorSeen.has(el)) continue;
-            llColorSeen.add(el);
-            if (el.dataset.liuliColor) continue;
-            if (el.children.length > 0) continue;
-            const text = (el.textContent || "").trim();
-            if (!text) continue;
-            const color = getComputedStyle(el).color.replace(/\s+/g, " ").trim();
-            const mapped = QQ_COLOR_MAP[color];
-            if (mapped) {
-                el.dataset.liuliColor = "1";
-                el.style.setProperty("color", mapped, "important");
-            }
-            if ((i & 63) === 0 && performance.now() - t0 > 8) return;
-        }
-    } catch (e) { /* 静默 */ }
-}
-
-const DIM_COLORS = new Set([
-    "rgb(128, 128, 128)", "rgb(102, 102, 102)", "rgb(153, 153, 153)"
-]);
-const TEXT_SELECTORS = [
-    ".text-ellipsis", ".secondary-info", ".group-user__name", ".group-member-name",
-    ".group-member .user-name", ".recent-contact-item .text-ellipsis",
-    ".contact-name", ".summary-main"
-];
-
-function fixContrast() {
-    try {
-        for (const sel of TEXT_SELECTORS) {
-            document.querySelectorAll(sel).forEach(el => {
-                if (el.dataset.liuliFg) return;
-                const color = getComputedStyle(el).color.replace(/\s+/g, " ").trim();
-                if (!DIM_COLORS.has(color)) return;
-                el.dataset.liuliFg = "1";
-                el.style.setProperty("color", "var(--ll-on-glass-2)", "important");
-            });
-        }
-    } catch (e) { /* 静默 */ }
-}
-
-function applyOverrides() {
-    try {
-        for (const [sel, bg] of GLASS) {
-            document.querySelectorAll(sel).forEach(el => {
-                if (el.dataset.liuliGlass) return;
-                el.dataset.liuliGlass = "1";
-                el.style.setProperty("background", bg, "important");
-                el.style.setProperty("backdrop-filter", "var(--ll-material-blur)", "important");
-                el.style.setProperty("-webkit-backdrop-filter", "var(--ll-material-blur)", "important");
-                el.style.setProperty("border-radius", "var(--ll-radius)", "important");
-            });
-        }
-        for (const sel of CLEAR) {
-            document.querySelectorAll(sel).forEach(el => {
-                if (el.dataset.liuliClear) return;
-                el.dataset.liuliClear = "1";
-                el.style.setProperty("background", "transparent", "important");
-                el.style.setProperty("backdrop-filter", "none", "important");
-                el.style.setProperty("-webkit-backdrop-filter", "none", "important");
-            });
-        }
-    } catch (e) { /* 静默 */ }
-}
-
+/* 材质与颜色规则统一放在 surfaces.css，不逐个读取节点颜色再改写。 */
 async function loadText(name) {
     const response = await fetch(ASSET_BASE + name);
     if (!response.ok) throw new Error(name + " HTTP " + response.status);
@@ -531,45 +376,6 @@ function applyNavCard() {
  * 现在只做一件事：给设置页整层加一层半透明 + 模糊。
  * 内部容器一律不动 —— 保留 QQ 自己的深色卡片，保证文字可读。
  */
-const SETTINGS_NAV_LABELS = ["通用", "消息通知", "存储管理", "快捷键", "权限设置",
-    "登录设置", "账号绑定与授权", "超级调色盘", "关于QQ", "琉璃", "LiteLoaderQQNT"];
-
-function settingsPageBlur() {
-    if (!location.hash || location.hash.indexOf("#/setting") !== 0) return;
-    try {
-        let anchor = null;
-        const nodes = document.querySelectorAll("*");
-        for (let i = 0; i < nodes.length; i++) {
-            const el = nodes[i];
-            if (el.children.length > 1) continue;
-            const t = (el.textContent || "").trim();
-            if (SETTINGS_NAV_LABELS.indexOf(t) < 0) continue;
-            const r = el.getBoundingClientRect();
-            if (r.width < 20 || r.x > 340) continue;
-            anchor = el;
-            break;
-        }
-        if (!anchor) return;
-
-        let root = anchor;
-        while (root.parentElement && root.parentElement !== document.body) {
-            root = root.parentElement;
-        }
-        if (!root || root === document.body) return;
-
-        if (!root.dataset.liuliSettingsBlur) {
-            const r = root.getBoundingClientRect();
-            // 只有在根容器确实覆盖了窗口主体时才动手，避免命中一个局部容器
-            if (r.width < innerWidth * 0.6 || r.height < innerHeight * 0.6) return;
-            root.dataset.liuliSettingsBlur = "1";
-            root.style.setProperty("background", "rgba(var(--ll-acrylic), 0.5)", "important");
-            root.style.setProperty("backdrop-filter", "blur(24px) saturate(1.6)", "important");
-            root.style.setProperty("-webkit-backdrop-filter", "blur(24px) saturate(1.6)", "important");
-        }
-    } catch (e) { /* 静默 */ }
-}
-
-
 /* ---------- 输入区：TG 式单行 ----------
  * ⚠️ 关键教训：按钮千万不能挂进 .chat-input-area。
  * 那是 Vue 管理的子树，每次重渲染都会把外部节点清掉，
@@ -776,73 +582,36 @@ function llSyncPins(overlay) {
  * 挪完打个标记，避免反复搬动。
  */
 function moveSenderIntoBubble() {
-    try {
-        var containers = document.querySelectorAll(".message-container");
-        for (var i = 0; i < containers.length; i++) {
-            var mc = containers[i];
-            var bubble = mc.querySelector(".msg-content-container");
-            if (!bubble) continue;
-            var name = mc.querySelector(".user-name");
-            if (!name) continue;
-            if (bubble.contains(name)) continue;
-            // 把姓名节点搬到气泡最前面
-            bubble.insertBefore(name, bubble.firstChild);
-            bubble.dataset.liuliNamed = "1";
+    for (const row of document.querySelectorAll(".chat-msg-area .message-container")) {
+        const bubble = row.querySelector(".msg-content-container");
+        const original = row.querySelector(".user-name:not(.qm-sender)");
+        if (!bubble || !original) continue;
+        let copy = bubble.querySelector(":scope > .qm-sender");
+        const name = original.querySelector(".text-ellipsis")?.textContent || original.textContent;
+        if (copy?.dataset.name === name) continue;
+        if (!copy) {
+            copy = document.createElement("span"); copy.className = "user-name qm-sender";
+            copy.addEventListener("click", () => original.click()); bubble.prepend(copy);
         }
-    } catch (e) { /* 静默 */ }
+        copy.textContent = ""; copy.dataset.name = name;
+        const label = document.createElement("span"); label.textContent = name; copy.append(label);
+        original.querySelectorAll(".q-tag, .group-member-label").forEach(tag => copy.append(tag.cloneNode(true)));
+    }
 }
 
-
-/* ---------- 连续消息合并 ----------
- * TG 的规则：
- *   组内第一条 → 显示名字，隐藏头像
- *   组内中间   → 名字和头像都隐藏
- *   组内最后一条 → 隐藏名字，显示头像
- *   单条       → 名字 + 头像都显示
- * 发送者身份用「名字文本」判定（名字被搬进气泡后仍然可读），
- * 取不到名字时退回头像 src。
- */
 function groupMessages() {
-    try {
-        var list = document.querySelectorAll(".message-container");
-        if (list.length === 0) return;
-
-        // ⚠️ 不能用整个 .user-name 的文本：指针悬停时 QQ 会往里插 .send-time 时间戳，
-        // key 一变这条就被判成 single，名字/头像跳出来、和上下条分开。
-        // 优先用头像的 aria-label（发送者昵称，悬停不变），再退到昵称本身的 span。
-        function keyOf(mc) {
-            var av = mc.querySelector(":scope > .avatar-span");
-            var lbl = av && av.getAttribute("aria-label");
-            if (lbl) return lbl;
-            var nick = mc.querySelector(".user-name > .text-ellipsis");
-            if (nick) {
-                var t = (nick.textContent || "").trim();
-                if (t) return t;
-            }
-            var img = mc.querySelector('[class*="avatar"] img');
-            if (img && img.src) return img.src;
-            return "";
-        }
-
-        var keys = [];
-        for (var i = 0; i < list.length; i++) keys.push(keyOf(list[i]));
-
-        for (var j = 0; j < list.length; j++) {
-            var mc = list[j];
-            var key = keys[j];
-            if (!key) { mc.dataset.liuliG = ""; continue; }
-            var prevSame = j > 0 && keys[j - 1] === key;
-            var nextSame = j < list.length - 1 && keys[j + 1] === key;
-            var g;
-            if (!prevSame && !nextSame) g = "single";
-            else if (!prevSame && nextSame) g = "first";
-            else if (prevSame && nextSame) g = "mid";
-            else g = "last";
-            if (mc.dataset.liuliG !== g) mc.dataset.liuliG = g;
-        }
-    } catch (e) { /* 静默 */ }
+    const nodes = [...document.querySelectorAll(".chat-msg-area .message-container")].filter(node => !node.closest(".viewport-list__measure, [data-liuli-ghost]"));
+    const records = nodes.map(node => {
+        const message = recordOf(node.closest(".message") || node);
+        const self = !!node.querySelector(".container--self");
+        const image = node.querySelector(":scope > .avatar-span img");
+        const sender = message?.senderUid || message?.senderUin || image?.src || "";
+        const time = Number(message?.msgTime) || 0;
+        return { sender: String(sender), self, time, day: time ? new Date(time * 1000).toDateString() : null };
+    });
+    const groups = groupRuns(records);
+    nodes.forEach((node,index) => { if (node.dataset.liuliG !== groups[index]) node.dataset.liuliG = groups[index]; });
 }
-
 
 /* ---------- 头像吸附（TG 行为） ----------
  * 头像只在组内最后一条上渲染，自然位置在组底。
@@ -929,84 +698,7 @@ function installAvatarStick() {
  *   2. 用 Web Animations API 播动画（不改 style，Vue 无感）；
  *   3. 不插入、不移动任何节点。
  * ════════════════════════════════════════════════════════════ */
-var LL_REDUCED = (function () { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch (e) { return false; } })();
-var LL_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-
 function llNorm(s) { return (s || "").replace(/\s+/g, " ").trim(); }
-
-/* 容器可视范围内的元素，按屏幕位置从上到下（排除虚拟列表的测量副本） */
-function llVisibleIn(container, sel) {
-    var cr = container.getBoundingClientRect();
-    var out = [];
-    container.querySelectorAll(sel).forEach(function (el) {
-        if (el.closest(".viewport-list__measure")) return;
-        var r = el.getBoundingClientRect();
-        if (r.width < 2 || r.height < 2 || r.bottom < cr.top || r.top > cr.bottom) return;
-        out.push({ el: el, top: r.top });
-    });
-    out.sort(function (a, b) { return a.top - b.top; });
-    return out.map(function (o) { return o.el; });
-}
-
-/* 逐行上浮入场（DSH 会话列表 liuli-treeitem-rise 同款） */
-function llRiseIn(els, step) {
-    if (LL_REDUCED || !els.length || typeof els[0].animate !== "function") return;
-    els.slice(0, 18).forEach(function (el, i) {
-        try {
-            el.animate([{ opacity: 0, transform: "translateY(14px)" }, { opacity: 1, transform: "none" }],
-                { duration: 460, delay: i * (step || 26), easing: LL_EASE, fill: "backwards" });
-        } catch (e) {}
-    });
-}
-
-/* ── 会话列表：选中底色从旧位置滑到新位置 ──
- * 选中底色画在 .recent-contact-item--selected::before 上（lists.css），
- * 切换时对新选中项的 ::before 做 FLIP：从旧项的位置平移回来。
- * 用 data-contact-id 判断是否真的换了会话：虚拟列表滚动时会复用节点、
- * 重挂 --selected 类，id 不变就不动。 */
-var llSel = { id: null, root: null, obs: null };
-function llWatchContactList() {
-    var root = document.querySelector(".recent-contact");
-    if (!root || llSel.root === root) return;
-    if (llSel.obs) llSel.obs.disconnect();
-    llSel.root = root;
-    var cur = llVisibleIn(root, ".recent-contact-item.recent-contact-item--selected")[0];
-    llSel.id = cur ? cur.getAttribute("data-contact-id") : null;
-    llSel.obs = new MutationObserver(function (recs) {
-        var gained = null, lost = null;
-        for (var i = 0; i < recs.length; i++) {
-            var t = recs[i].target;
-            if (!t.classList || !t.classList.contains("recent-contact-item")) continue;
-            if (t.closest(".viewport-list__measure")) continue;
-            var was = (recs[i].oldValue || "").indexOf("recent-contact-item--selected") >= 0;
-            var now = t.classList.contains("recent-contact-item--selected");
-            if (now && !was) gained = t;
-            if (was && !now) lost = t;
-        }
-        if (!gained) return;
-        var id = gained.getAttribute("data-contact-id");
-        if (id === llSel.id) return;
-        llSel.id = id;
-        if (LL_REDUCED || typeof gained.animate !== "function") return;
-        var nr = gained.getBoundingClientRect();
-        var lr = lost && lost.isConnected ? lost.getBoundingClientRect() : null;
-        try {
-            if (lr && lr.height > 0) {
-                var dy = Math.round(lr.top - nr.top);
-                gained.animate([{ transform: "translateY(" + dy + "px)" }, { transform: "translateY(0)" }], {
-                    duration: Math.min(460, 240 + Math.abs(dy) * 0.22),
-                    easing: "cubic-bezier(0.3, 1.25, 0.45, 1)",
-                    pseudoElement: "::before"
-                });
-            } else {
-                gained.animate([{ opacity: 0, transform: "scale(0.94)" }, { opacity: 1, transform: "none" }],
-                    { duration: 260, easing: LL_EASE, pseudoElement: "::before" });
-            }
-        } catch (e) {}
-    });
-    llSel.obs.observe(root, { attributes: true, attributeFilter: ["class"], attributeOldValue: true, subtree: true });
-    requestAnimationFrame(function () { llRiseIn(llVisibleIn(root, ".recent-contact-item"), 26); });
-}
 
 /* ── 群成员 ── */
 /* 当前聊天里最近说话的人：名字 → 名次（0 = 最近一位，不含自己） */
@@ -1032,14 +724,8 @@ function llGroupMembersPass() {
         var rows = gm.querySelectorAll(".group-user");
         if (!rows.length) return;
 
-        // 换群 → 成员行入场
-        var title = document.querySelector(".chat-header .panel-header__title");
-        var key = llNorm(title && title.textContent);
-        if (key && key !== llGM.key) {
-            llGM.key = key;
-            var host = gm.querySelector(".group-member-list") || gm;
-            requestAnimationFrame(function () { llRiseIn(llVisibleIn(host, ".group-user"), 16); });
-        }
+        const key = document.querySelector(".recent-contact-item--selected")?.getAttribute("data-contact-id") || "";
+        llGM.key = key;
 
         // 管理团队：群主 + 管理员排在最前面且连续，画成一整块
         var byIdx = {};
@@ -1089,129 +775,15 @@ function llGroupMembersPass() {
     } catch (e) { /* 静默 */ }
 }
 
-/* 两个列表的节点增删（滚动、换群、换会话）同步处理：
- * MutationObserver 回调在绘制前执行，新行第一帧就带着标记。 */
-var llSideRaf = 0;
-function installSideListObserver() {
-    if (window.__liuliSideObs) return;
-    var obs = new MutationObserver(function (recs) {
-        var hit = false;
-        for (var i = 0; i < recs.length && !hit; i++) {
-            var t = recs[i].target;
-            if (t && t.nodeType !== 1) t = t.parentElement;
-            if (t && t.closest && t.closest(".group-member, .recent-contact, .two-col-layout__aside")) hit = true;
-        }
-        if (!hit || llSideRaf) return;
-        // 合并到一帧：选人对话框等一次挂几千个节点时不会被触发成百上千次
-        llSideRaf = requestAnimationFrame(function () {
-            llSideRaf = 0;
-            try { llWatchContactList(); llGroupMembersPass(); } catch (e) {}
-        });
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    window.__liuliSideObs = obs;
-}
-
 function liuliMessagePass() {
     moveSenderIntoBubble();
     groupMessages();
     markQuoteRoots();
+    llAtPass();
+    featuresPass();
     scheduleStick();          // 读位置的活放到下一帧，不在 DOM 变动回调里强制排版
 }
 
-
-/* ---------- 动效：新消息出现 / 切换会话 ----------
- * 虚拟列表滚动时也会挂新节点，不能见节点就播动画。
- * 用 .ml-item 的消息 id（递增的 64 位整数）判断：只有比当前会话已见过的
- * 最大 id 还新的，才是"刚收到/刚发出"的消息。换会话时只记基线、不播。 */
-var llMsgSeen = { chat: null, max: null };
-function llChatKey() {
-    var t = document.querySelector(".aio .chat-header .panel-header__title");
-    return t ? (t.textContent || "").replace(/\s+/g, " ").trim() : "";
-}
-function llMsgId(el) {
-    try { return el && /^\d+$/.test(el.id) ? BigInt(el.id) : null; } catch (e) { return null; }
-}
-function llMotionPass(added) {
-    try {
-        var key = llChatKey();
-        var items = document.querySelectorAll(".chat-msg-area .ml-item[id]");
-        if (!items.length) return;
-        if (key !== llMsgSeen.chat) {
-            var first = llMsgSeen.chat !== null;
-            llMsgSeen.chat = key;
-            var m = null;
-            items.forEach(function (it) { var v = llMsgId(it); if (v !== null && (m === null || v > m)) m = v; });
-            llMsgSeen.max = m;
-            // 换会话：消息区整体轻轻浮上来
-            if (first && !LL_REDUCED) {
-                var area = document.querySelector(".chat-msg-area");
-                if (area && area.animate) area.animate([{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }],
-                    { duration: 280, easing: LL_EASE });
-            }
-            return;
-        }
-        if (LL_REDUCED || !added || !added.length) return;
-        added.forEach(function (it) {
-            var v = llMsgId(it);
-            if (v === null || llMsgSeen.max === null || v <= llMsgSeen.max) return;
-            llMsgSeen.max = v;
-            var mc = it.querySelector(".message-container");
-            var w = it.querySelector(".message-content__wrapper");
-            if (!mc || !w || !w.animate) return;
-            var self = mc.classList.contains("message-container--self") || !!mc.querySelector(".container--self");
-            w.style.transformOrigin = self ? "100% 100%" : "0% 100%";
-            w.animate([
-                { opacity: 0, transform: "translateY(12px) scale(0.92)" },
-                { opacity: 1, transform: "translateY(-2px) scale(1.01)", offset: 0.7 },
-                { opacity: 1, transform: "none" }
-            ], { duration: 360, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
-            var av = mc.querySelector(":scope > .avatar-span");
-            if (av && av.animate && getComputedStyle(av).display !== "none") {
-                av.animate([{ opacity: 0, transform: "scale(0.6)" }, { opacity: 1, transform: "none" }],
-                    { duration: 300, delay: 60, easing: "cubic-bezier(0.3, 1.35, 0.45, 1)", fill: "backwards" });
-            }
-        });
-    } catch (e) { /* 静默 */ }
-}
-
-function installMessageObserver() {
-    if (window.__liuliMsgObs) return;
-    var busy = false;
-    function touchesMessages(rec) {
-        var t = rec.target;
-        if (t && t.nodeType !== 1) t = t.parentElement;
-        if (t && t.closest && t.closest(".chat-msg-area")) return true;
-        for (var i = 0; i < rec.addedNodes.length; i++) {
-            var n = rec.addedNodes[i];
-            if (n.nodeType !== 1) continue;
-            if (n.matches(".message-container, .chat-msg-area") || n.querySelector(".message-container")) return true;
-        }
-        return false;
-    }
-    var obs = new MutationObserver(function (recs) {
-        if (busy || window.__liuliPause) return;
-        var hit = false;
-        for (var i = 0; i < recs.length; i++) { if (touchesMessages(recs[i])) { hit = true; break; } }
-        if (!hit) return;
-        busy = true;
-        var added = [];
-        for (var k = 0; k < recs.length; k++) {
-            var an = recs[k].addedNodes;
-            for (var q = 0; q < an.length; q++) {
-                var nd = an[q];
-                if (nd.nodeType !== 1) continue;
-                if (nd.classList && nd.classList.contains("ml-item")) added.push(nd);
-                else if (nd.querySelectorAll) nd.querySelectorAll(".ml-item[id]").forEach(function (x) { added.push(x); });
-            }
-        }
-        try { liuliMessagePass(); } catch (e) { /* 静默 */ }
-        try { llMotionPass(added); } catch (e) { /* 静默 */ }
-        finally { obs.takeRecords(); busy = false; }
-    });
-    obs.observe(document.body, { childList: true, subtree: true });
-    window.__liuliMsgObs = obs;
-}
 
 /* 指向唤出的状态机：不用 :has(:hover)（这版 Chromium 里 :has + :hover 失效很慢，
  * 实测把手已 hover、侧栏仍不展开）。进入入口或控件本身 → body 打标记；
@@ -1249,13 +821,16 @@ function installRevealTracker() {
         var r = el.getBoundingClientRect();
         return r.width > 0 && x >= r.left - PAD && x <= r.right + PAD && y >= r.top - PAD && y <= r.bottom + PAD;
     }
-    function onMove(e) {
-        var x = e.clientX, y = e.clientY, w = window.innerWidth;
+    var revealFrame = 0, pointer = { clientX: -1, clientY: -1 };
+    function updatePointer() {
+        revealFrame = 0;
+        var x = pointer.clientX, y = pointer.clientY, w = window.innerWidth;
         set("nav", x <= EDGE || (state.nav && over(".container-sidebar", x, y)));
         set("l", (y <= EDGE && x >= 56 && x <= CORNER + 56) || (state.l && over(".topbar-profile", x, y)));
         set("r", (y <= EDGE && x >= w - CORNER) || (state.r && over(".window-control-area", x, y)));
     }
-    function leaveAll() { set("nav", false); set("l", false); set("r", false); }
+    function onMove(e) { pointer = { clientX: e.clientX, clientY: e.clientY }; if (!revealFrame) revealFrame = requestAnimationFrame(updatePointer); }
+    function leaveAll() { cancelAnimationFrame(revealFrame); revealFrame = 0; set("nav", false); set("l", false); set("r", false); }
     document.addEventListener("mousemove", onMove, true);
     document.documentElement.addEventListener("mouseleave", leaveAll);
     window.addEventListener("blur", leaveAll);
@@ -1357,7 +932,6 @@ function loadWallpaperState() {
 function saveWallpaperState(state, broadcast) {
     try { localStorage.setItem(LL_WALLPAPER_KEY, JSON.stringify(state)); } catch (e) {}
     if (broadcast !== false) {
-        window.__liuliPaletteApplied = false;
         applyDynamicPalette();
     }
 }
@@ -1408,84 +982,26 @@ function normalizeAreaToRatio(area, ratio) {
 
 /* ── 由选区推导 background-size / position ──
  * cover 选区放大公式：size = 100%/w 100%/h；position = x/(1-w) y/(1-h) */
-function bgGeometry(area, imageRatio, viewportRatio) {
-    if (arguments[3] === "contain") return { size: "contain", position: "center" };
-    if (arguments[3] === "stretch") return { size: "100% 100%", position: "center" };
-    if (!area || area.w <= 0.04 || area.h <= 0.04) {
-        return { size: "cover", position: "center" };
-    }
-    const vRatio = viewportRatio && viewportRatio > 0 ? viewportRatio : window.innerWidth / window.innerHeight;
-    const iRatio = imageRatio && imageRatio > 0 ? imageRatio : vRatio;
-    const n = normalizeAreaToRatio(area, vRatio / iRatio);
-    if (n.w >= 0.999 || n.h >= 0.999) {
-        return { size: "cover", position: "center" };
-    }
-    const px = Math.min(1, Math.max(0, n.x / (1 - n.w)));
-    const py = Math.min(1, Math.max(0, n.y / (1 - n.h)));
-    return {
-        size: "calc(100% / " + n.w + ") calc(100% / " + n.h + ")",
-        position: (px * 100).toFixed(2) + "% " + (py * 100).toFixed(2) + "%"
-    };
+function bgGeometry(area, imageRatio, viewportRatio, fit = "cover") {
+    return wallpaperGeometry(imageRatio || 1, 1, viewportRatio || innerWidth / innerHeight, 1, area, fit);
 }
 
-function ensureWallpaperStyle() {
-    let el = document.getElementById("liuli-wallpaper-style");
-    if (!el) {
-        el = document.createElement("style");
-        el.id = "liuli-wallpaper-style";
-        document.head.appendChild(el);
-    }
-    return el;
-}
-
+let wallpaper = null;
 function renderWallpaper(state) {
-    const el = ensureWallpaperStyle();
-    llWpLast = state;
-    if (!state || !state.src) {
-        el.textContent = "";
-        return;
+    if (!wallpaper) {
+        wallpaper = createWallpaper();
+        window.addEventListener("pagehide", () => wallpaper.dispose(), { once: true });
     }
-    const g = bgGeometry(state.area, getImageRatio(state.src), window.innerWidth / window.innerHeight, state.fit || "cover");
-    el.textContent =
-        // 伪元素的骨架也写在这里：以前只在默认壁纸 wallpaper.css 里，
-        // 默认壁纸不再发布后，没有 content 的 ::before 不会画出来。
-        "#app::before {" +
-        "  content: \"\" !important; position: absolute !important; inset: 0 !important;" +
-        "  z-index: 0 !important; pointer-events: none !important;" +
-        "  background-image: linear-gradient(rgba(var(--ll-scrim-rgb), var(--ll-wallpaper-dim, 0.18))," +
-        "    rgba(var(--ll-scrim-rgb), var(--ll-wallpaper-dim, 0.18))),\n" +
-        "    url(\"" + state.src + "\") !important;" +
-        "  background-position: " + g.position + " !important;" +
-        "  background-size: " + g.size + " !important;" +
-        "  background-repeat: no-repeat !important;" +
-        "}";
+    return wallpaper.update(state);
 }
-
-/* 窗口拉伸：选区算出的 background-size 是按当时的窗口比例定的，比例一变图就被拉歪。
- * 每次尺寸变化按新比例重算一遍（每帧最多一次，用内存里的状态，不重复解析 localStorage 里的大图）。 */
-let llWpLast = null;
-let llWpResizeRaf = 0;
-try {
-    window.addEventListener("resize", function () {
-        if (llWpResizeRaf || !llWpLast || !llWpLast.src) return;
-        llWpResizeRaf = requestAnimationFrame(function () {
-            llWpResizeRaf = 0;
-            renderWallpaper(llWpLast);
-        });
-    });
-} catch (e) {}
 
 /* 跨窗口同步（设置页改 → 主界面跟着换） */
 try {
     window.addEventListener("storage", function (e) {
         if (e.key !== LL_WALLPAPER_KEY) return;
         const st = loadWallpaperState();
-        if (st.src && !getImageRatio(st.src)) {
-            primeImageRatio(st.src).then(function () { (function(){ var st = loadWallpaperState(); if (st.src) { primeImageRatio(st.src).then(function(){ renderWallpaper(loadWallpaperState()); }); } else { renderWallpaper(st); } })(); });
-        }
         renderWallpaper(st);
-        window.__liuliPaletteApplied = false;
-        applyDynamicPalette();
+        applyDynamicPalette().catch(error => console.warn("[liuli] palette", error));
         if (typeof refreshWallpaperPreview === "function") refreshWallpaperPreview();
     });
 } catch (e) {}
@@ -1575,7 +1091,7 @@ function llMainViewportRatio() {
     try {
         window.addEventListener("resize", function () { clearTimeout(t); t = setTimeout(pub, 80); });
         setTimeout(pub, 500);
-        setInterval(pub, 3000);
+        window.addEventListener("qm-route", pub);
         window.addEventListener("storage", function (e) {
             if (e.key === LL_MAIN_VP_KEY && typeof refreshWallpaperPreview === "function") refreshWallpaperPreview();
         });
@@ -1607,7 +1123,6 @@ function buildWallpaperControls(host) {
     removeBtn.addEventListener("click", function () {
         try { localStorage.removeItem(LL_WALLPAPER_KEY); } catch (e) {}
         renderWallpaper(null);
-        window.__liuliPaletteApplied = false;
         applyDynamicPalette();
         fileName.textContent = "";
         refreshWallpaperPreview();
@@ -1917,7 +1432,6 @@ function llApplyMode(withTransition, x, y) {
         if (m === "auto") delete document.body.dataset.liuliMode;
         else document.body.dataset.liuliMode = m;
         document.body.dataset.liuliDark = llIsDark() ? "1" : "0";
-        window.__liuliPaletteApplied = false;
         return applyDynamicPalette();
     };
     if (withTransition && typeof document.startViewTransition === "function") {
@@ -1989,7 +1503,7 @@ function buildPanelContent(host, settings) {
 
     const sub = document.createElement("div");
     sub.className = "liuli-panel__sub";
-    sub.textContent = "材质与外观 · 实时生效";
+    sub.textContent = "QmQQNT · 外观、消息与交互";
     host.appendChild(sub);
 
     const info = document.createElement("div");
@@ -2001,7 +1515,6 @@ function buildPanelContent(host, settings) {
     info.appendChild(infoText);
     host.appendChild(info);
     buildModeControls(host);
-    buildMarkdownControls(host);
     buildFontControls(host);
     const refreshInfo = () => {
         const src = document.body.dataset.liuliSource || DEFAULT_SOURCE;
@@ -2010,7 +1523,8 @@ function buildPanelContent(host, settings) {
         infoText.textContent = "壁纸取色 " + src + " → 品牌 " + brand;
     };
     refreshInfo();
-    setInterval(refreshInfo, 3000);
+    const infoObserver = new MutationObserver(() => { if (host.isConnected) refreshInfo(); else infoObserver.disconnect(); });
+    infoObserver.observe(document.body, { attributes: true, attributeFilter: ["data-liuli-source", "data-liuli-dark"] });
 
     const group = document.createElement("div");
     group.className = "liuli-panel__group";
@@ -2063,6 +1577,7 @@ function buildPanelContent(host, settings) {
 
     buildWallpaperControls(host);
     buildLayoutSection(host);
+    buildFeatureSettings(host).catch(error => console.warn("[qm-qqnt] settings", error));
 
     const reset = document.createElement("div");
     reset.className = "liuli-field__hint";
@@ -2107,14 +1622,12 @@ async function initPanel() {
     const started = Date.now();
     installRouteScope();
     try {
-        const chunks = [];
-        for (const file of FILES) {
-            // wallpaper.css 是可选的本地默认壁纸（不随仓库发布），没有就跳过
-            try { chunks.push(await loadText(file)); }
-            catch (e) { if (!OPTIONAL_FILES.has(file)) throw e; }
-        }
-        ensureStyle().textContent = chunks.join("\n");
-        document.body.dataset.liuliTheme = "dsh";
+        const chunks = await Promise.all(FILES.map(async file => {
+            try { return await loadText(file); }
+            catch (error) { if (!OPTIONAL_FILES.has(file)) throw error; return ""; }
+        }));
+        await initPanel();
+        installLayout(() => { llSyncPins(); });
         llApplyFont();
 
         // 静态色板先兜底，再按壁纸动态覆盖（失败时保持静态值）
@@ -2126,21 +1639,20 @@ async function initPanel() {
         try { await applyDynamicPalette(); }
         catch (e) { console.warn("[liuli-dsh-theme] dynamic palette failed:", e && e.message); }
 
-        renderWallpaper(loadWallpaperState());
-        applyOverrides();
-        fixContrast();
-        normalizeColors();
-        setInterval(() => { if (window.__liuliPause) return; if (performance.now() - (window.__llScrollT || 0) < 600) return; /* 正在滚动：这一轮跳过，免得滚动中卡一下 */ if (document.querySelector(".q-dialog-modal")) { mountInputBar(); return; } applyOverrides(); fixContrast(); normalizeColors(); keepWindowControlsVisible(); mountInputBar(); groupMessages(); stickAvatars(); markQuoteRoots(); moveSenderIntoBubble(); ensureHoverEntries(); llWatchContactList(); llGroupMembersPass(); llMarkdownPass(); llLayoutPass(); }, 1500);
-        try { installLayout(function () { llSyncPins(); }); } catch (e) { console.warn("[liuli-dsh-theme] layout failed:", e && e.message); }
-        try { installArkExternal(window.liuli_api); } catch (e) { console.warn("[liuli-dsh-theme] ark external failed:", e && e.message); }
-        installMarkdownObserver();
+        await renderWallpaper(loadWallpaperState());
+        ensureStyle().textContent = chunks.join("\n");
+        document.body.dataset.liuliTheme = "dsh";
+        const disposeTokens = installThemeTokens(chunks[FILES.indexOf("qq-tokens.css")]);
+        window.addEventListener("pagehide", disposeTokens, { once: true });
+        try { installArkExternal(window.liuli_api, () => featureConfig().replaceMiniApps !== false); } catch (e) { console.warn("[liuli-dsh-theme] ark external failed:", e && e.message); }
+        await initFeatures();
         installAvatarStick();
         ensureHoverEntries();
-        installMessageObserver();
-        installSideListObserver();
-        llWatchContactList();
-        liuliMessagePass();
-        try { await initPanel(); } catch (e) { console.warn("[liuli-dsh-theme] panel failed:", e && e.message); }
+        installMotion({
+            prepareMessages: liuliMessagePass,
+            refreshUi() { keepWindowControlsVisible(); ensureHoverEntries(); llGroupMembersPass(); llLayoutPass(); refreshFeatureUi(); },
+            syncInput: mountInputBar
+        });
         console.log("[liuli-dsh-theme] ready in " + (Date.now() - started) + "ms");
     } catch (error) {
         console.error("[liuli-dsh-theme] inject failed:", error && error.message);
@@ -2165,155 +1677,6 @@ export const onSettingWindowCreated = async view => {
 };
 
 
-/* ---------- Markdown 渲染（移植自 BetterQQNT 的 inlineMarkdown） ----------
- * 只认行内语法：`代码`、**粗体**、*斜体*、~~删除线~~、||剧透||，换行保留。
- * 先整体转义再替换，所以消息里的 < > & 不会变成标签。
- * 只处理聊天记录里的 .text-normal；原文存在 data-ll-md-src，关掉开关时原样还原。
- * 开关存 localStorage（设置窗口与主窗口同源，storage 事件实时同步）。
- */
-const LL_MD_KEY = "liuli-md-render";
-const LL_MD_TRIGGER = /`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\s][^*\n]*\*|~~[^~\n]+~~|\|\|[^|\n]+\|\|/;
-
-function llMdEnabled() {
-    try { return localStorage.getItem(LL_MD_KEY) !== "0"; } catch (e) { return true; }
-}
-
-function llInlineMarkdown(md) {
-    return md
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#x27;")
-        .replace(/`([^`\n]+)`/g, "<code>$1</code>")
-        .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>")
-        .replace(/\*([^*\s][^*\n]*)\*/g, "<em>$1</em>")
-        .replace(/~~([^~\n]+)~~/g, "<del>$1</del>")
-        .replace(/\|\|([^|\n]+)\|\|/g, '<span class="ll-spoiler">$1</span>')
-        .replace(/\n/g, "<br>");
-}
-
-function llMarkdownPass() {
-    // 性能：滚动时这里会被频繁调用。只读 textContent（不触发排版），
-    // 判过的元素在节点上记一个属性，文本没变就直接跳过。
-    try {
-        const on = llMdEnabled();
-        const els = document.querySelectorAll(".ml-item .text-normal");
-        for (let i = 0; i < els.length; i++) {
-            const el = els[i];
-            if (!on) {
-                if (el.__llMdSrc !== undefined) {
-                    el.textContent = el.__llMdSrc;
-                    el.__llMdSrc = undefined;
-                    el.__llMdSeen = undefined;
-                    const box = el.closest(".message-content");
-                    if (box) box.classList.remove("ll-inline-md");
-                }
-                continue;
-            }
-            const text = el.textContent;
-            if (el.__llMdSeen === text) continue;          // 原文没变 / 渲染结果没被 Vue 改写
-            if (!LL_MD_TRIGGER.test(text)) { el.__llMdSeen = text; el.__llMdSrc = undefined; continue; }
-            el.__llMdSrc = text;
-            el.innerHTML = llInlineMarkdown(text);
-            el.__llMdSeen = el.textContent;
-            const box = el.closest(".message-content");
-            if (box) box.classList.add("ll-inline-md");
-        }
-    } catch (e) { /* 静默 */ }
-}
-
-/* ---------- 消息入场：级联 ----------
- * 只给两种情况做动画，滚动加载历史时不做（否则一滚就闪）：
- *   1. 刚切到一个会话：600ms 内出现的消息，从下往上依次浮入，每条错开 28ms，最多 14 条
- *   2. 新消息：加到列表最末尾的那条
- * 动画只用 opacity + transform，交给合成层，不触发排版。 */
-let llEnterPeer = "";
-let llEnterUntil = 0;
-const LL_ENTER_MAX = 14;
-
-function llCurrentPeer() {
-    const rec = llMsgRecordOf(document.querySelector(".chat-msg-area .message"));
-    return rec ? String(rec.peerUid) : "";
-}
-
-function llAnimateEnter(items) {
-    if (!items.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    // 越靠下（越新）越先出来
-    items.sort((a, b) => b.getBoundingClientRect().top - a.getBoundingClientRect().top);
-    items.slice(0, LL_ENTER_MAX).forEach((el, i) => {
-        el.style.setProperty("--ll-enter-i", String(i));
-        el.classList.remove("ll-enter");
-        void el.offsetWidth;
-        el.classList.add("ll-enter");
-        clearTimeout(el.__llEnterT);
-        el.__llEnterT = setTimeout(() => el.classList.remove("ll-enter"), 400 + i * 28);
-    });
-}
-
-function llHandleAdded(records) {
-    const added = [];
-    for (const r of records) {
-        for (const n of r.addedNodes) {
-            if (n.nodeType === 1 && n.classList.contains("ml-item")) added.push(n);
-        }
-    }
-    if (!added.length) return;
-    const now = Date.now();
-    const peer = llCurrentPeer();
-    if (peer && peer !== llEnterPeer) { llEnterPeer = peer; llEnterUntil = now + 600; }
-    if (now < llEnterUntil) { llAnimateEnter(added); return; }
-    // 新消息：节点是列表里最后一条
-    const fresh = added.filter(n => !n.nextElementSibling);
-    if (fresh.length) llAnimateEnter(fresh);
-}
-
-function installMarkdownObserver() {
-    if (window.__llMdObserver) return;
-    // 性能：DOM 变动后 150ms 才跑一次（滚动期间合并成一次），不再每帧跑
-    let timer = 0;
-    const run = () => { timer = 0; llMarkdownPass(); llAtPass(); };
-    window.__llMdObserver = new MutationObserver(records => {
-        try { llHandleAdded(records); } catch (e) {}
-        if (!timer) timer = setTimeout(run, 150);
-    });
-    window.__llMdObserver.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("storage", e => { if (e.key === LL_MD_KEY) llMarkdownPass(); });
-    run();
-}
-
-function buildMarkdownControls(host) {
-    const row = document.createElement("div");
-    row.className = "liuli-wp-fit liuli-mode-row";
-    const label = document.createElement("span");
-    label.textContent = "Markdown 渲染";
-    const seg = document.createElement("div");
-    seg.className = "liuli-seg";
-    row.appendChild(label);
-    row.appendChild(seg);
-    host.appendChild(row);
-    const btns = {};
-    [["1", "开启"], ["0", "关闭"]].forEach(function (p) {
-        const b = document.createElement("button");
-        b.type = "button";
-        b.className = "liuli-seg__item";
-        b.textContent = p[1];
-        b.addEventListener("click", function () {
-            try { localStorage.setItem(LL_MD_KEY, p[0]); } catch (err) {}
-            llMarkdownPass();
-            refresh();
-        });
-        seg.appendChild(b);
-        btns[p[0]] = b;
-    });
-    function refresh() {
-        const cur = llMdEnabled() ? "1" : "0";
-        Object.keys(btns).forEach(function (k) { btns[k].classList.toggle("is-active", k === cur); });
-    }
-    refresh();
-}
-
-
 /* ---------- 读消息数据 ----------
  * QQ 9.9.36 在 .message 元素上挂了 __VUE__（组件实例数组），props.msgRecord 就是这条消息。
  * 实测见 probe/ll-probe。 */
@@ -2330,6 +1693,7 @@ function llMsgRecordOf(el) {
  * 用 elementId 在 msgRecord.elements 里找到对应元素，比对 atNtUid 与自己的 uid。
  * atType 1 是 @全体成员，算作 @我。 */
 let llSelfUid = "";
+window.addEventListener("qm-account", event => { llSelfUid = String(event.detail || ""); document.querySelectorAll("[data-ll-at-id]").forEach(node => delete node.dataset.llAtId); llAtPass(); });
 function llLoadSelfUid() {
     if (llSelfUid || !window.liuli_api) return;
     window.liuli_api.selfUid().then(uid => { if (uid) { llSelfUid = String(uid); llAtPass(); } }).catch(() => {});
